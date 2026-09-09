@@ -8,3 +8,4 @@ Minecraft 1.21.1 NeoForge mod that adds special features for the StaTech Industr
 - Adds a NeoForgeHammer that is a BlockEntity variant of MI's ForgeHammer. Most of the code is taken from the MI implementation.
 - Adds functionality for Nukes from Modern Industrialization to explode.
 - Adds a Prospector Pick for finding the custom large deposits in the main modpack
+- Prevents Spectrum Ruin from being placed in world

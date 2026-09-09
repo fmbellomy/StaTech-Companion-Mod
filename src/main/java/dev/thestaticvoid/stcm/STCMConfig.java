@@ -21,6 +21,7 @@ public final class STCMConfig {
     public final ModConfigSpec.ConfigValue<Integer> prospectorVerticalRange;
     public final ModConfigSpec.ConfigValue<Integer> prospectorMinDepositSize;
     public final ModConfigSpec.ConfigValue<Integer> sampleProximityRange;
+    public final ModConfigSpec.ConfigValue<Boolean> preventRuinPlacement;
 
     private STCMConfig(ModConfigSpec.Builder builder){
         lootrMinXp = builder.comment("The minimum amount of XP gained from opening Lootr chests.").define("lootr_min_xp", 15);
@@ -30,6 +31,7 @@ public final class STCMConfig {
         prospectorVerticalRange = builder.comment("The vertical radius for the prospector to scan").define("prospector_y_radius", 256);
         prospectorMinDepositSize = builder.comment("The minimum amount of connected blocks to be considered a deposit").define("prospector_min_deposit_size", 32);
         sampleProximityRange = builder.comment("The distance between ore samples of the same type that duplicate waypoint creation should be blocked in").define("prospector_proximity", 16);
+        preventRuinPlacement = builder.comment("Prevents Spectrum \"Bottle of Ruin\" from being placed in the world. Replaces the behavior of clicking on bedrock, mainly for servers").define("prevent_ruin", false);
         builder.build();
     }
 }
