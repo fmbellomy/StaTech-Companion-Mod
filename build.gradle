@@ -179,6 +179,8 @@ dependencies {
     implementation "noobanidus.mods.lootr:lootr-neoforge:${lootr_version}"
     implementation "curse.maven:spectrum-${spectrum_version}"
     implementation "curse.maven:revelationary-${revelationary_version}"
+    implementation "curse.maven:adlods-${adlods_version}"
+    implementation "curse.maven:forge-endertech-${forge_endertech_version}"
     implementation "com.klikli_dev:modonomicon-${minecraft_version}-neoforge:${modonomicon_version}"
     compileOnly "dev.latvian.mods:kubejs-neoforge:${kubejs_version}"
     compileOnly "dev.emi:emi-neoforge:${emi_version}:api"
