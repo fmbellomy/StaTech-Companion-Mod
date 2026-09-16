@@ -1,5 +1,9 @@
 package dev.thestaticvoid.stcm.item;
 
+import com.endertech.minecraft.forge.math.Percentage;
+import com.endertech.minecraft.mods.adlods.ore.AbstractOre;
+import com.endertech.minecraft.mods.adlods.target.TargetGenResult;
+import com.endertech.minecraft.mods.adlods.world.WorldTargets;
 import dev.thestaticvoid.stcm.STCMConfig;
 import dev.thestaticvoid.stcm.client.compat.journeymap.STCMJMPlugin;
 import dev.thestaticvoid.stcm.data.MaterialLoader;
@@ -11,6 +15,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionResult;
@@ -20,21 +25,26 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.Property;
-import net.neoforged.neoforge.common.Tags;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 public class ProspectorPick extends Item {
     private static final Map<String, Integer> MaterialMap = new HashMap<>();
     private final int PICK_COOLDOWN = 100; // 5 seconds
+    private final List<TargetGenResult> depositsFound = new ArrayList<>();
     private long lastPickUseTime = 0;
     private Level level;
-    private final Map<BlockState, BlockPos> depositsFound = new HashMap<>();
 
     public ProspectorPick(Properties properties) {
         super(properties);
@@ -46,8 +56,8 @@ public class ProspectorPick extends Item {
             tooltipComponents.add(Component.translatable("tooltip.stcm.prospector_tooltip"));
         } else {
             tooltipComponents.add(Component.translatable("tooltip.stcm.prospector_tooltip_shift",
-                    STCMConfig.CONFIG.prospectorHorizontalRange.get(),
-                    STCMConfig.CONFIG.prospectorVerticalRange.get()));
+                    STCMConfig.CONFIG.prospectorHorizontalRange.get()
+            ));
         }
     }
 
@@ -83,7 +93,7 @@ public class ProspectorPick extends Item {
         }
 
         if (isPlayerPlaced) {
-            player.displayClientMessage(Component.translatable("chat.stcm.waypoint_failed_player_placed"), true );
+            player.displayClientMessage(Component.translatable("chat.stcm.waypoint_failed_player_placed"), true);
             return InteractionResult.FAIL;
         }
 
@@ -141,12 +151,8 @@ public class ProspectorPick extends Item {
                 player.sendSystemMessage(Component.translatable("chat.stcm.prospector_success"));
 
                 Map<String, BlockPos> oreNameMap = new HashMap<>();
-                this.depositsFound.forEach((blockState, pos) -> {
-                    String oreName = BuiltInRegistries.BLOCK.getKey(blockState.getBlock()).getPath();
-                    if (oreName.contains("deepslate_")) {
-                        oreName = oreName.substring("deepslate_".length());
-                    }
-                    oreNameMap.put(capitalizeFirstLetter((oreName.substring(0, oreName.indexOf("_ore"))).replace("_", " ")), pos);
+                this.depositsFound.forEach((result) -> {
+                    oreNameMap.put(result.name, result.pos);
                 });
 
                 SortedSet<String> sortedKeys = new TreeSet<>(oreNameMap.keySet());
@@ -168,75 +174,21 @@ public class ProspectorPick extends Item {
     }
 
     private void checkBlocksInArea(BlockPos startPosition, Level level) {
-        Map<BlockPos, BlockState> oresFound = new HashMap<>();
         this.depositsFound.clear();
-
-        // Thank you Mojang, very cool
-        Iterable<BlockPos> blockPosIterator = BlockPos.withinManhattan(
-                startPosition,
-                STCMConfig.CONFIG.prospectorHorizontalRange.get(),
-                STCMConfig.CONFIG.prospectorVerticalRange.get(),
-                STCMConfig.CONFIG.prospectorHorizontalRange.get());
-        for (BlockPos pos : blockPosIterator) {
-            BlockState state = level.getBlockState(pos);
-
-            if (state.is(Tags.Blocks.ORES)) {
-                // The Iterator returns MutableBlockPos which was causing issues
-                oresFound.put(new BlockPos(pos.getX(), pos.getY(), pos.getZ()), state);
-            }
-        }
-
-        Set<BlockState> depositTypes = new HashSet<>();
-        oresFound.forEach((pos, state) -> {
-            ResourceLocation temporary = BuiltInRegistries.BLOCK.getKey(state.getBlock());
-            Block ore = null, deepslate = null;
-            BlockState defaultState = null;
-            if (temporary.getPath().contains("deepslate_")) {
-                String formattedPath = temporary.getPath().substring("deepslate_".length());
-                if (BuiltInRegistries.BLOCK.containsKey(ResourceLocation.fromNamespaceAndPath(temporary.getNamespace(), formattedPath))) {
-                    ore = BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath(temporary.getNamespace(), formattedPath));
-                }
-                deepslate = state.getBlock();
-                defaultState = ore == null ? state : ore.defaultBlockState();
-            } else {
-                String formattedPath = "deepslate_" + temporary.getPath();
-                if (BuiltInRegistries.BLOCK.containsKey(ResourceLocation.fromNamespaceAndPath(temporary.getNamespace(), formattedPath))) {
-                    deepslate = BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath(temporary.getNamespace(), formattedPath));
-                }
-                ore = state.getBlock();
-                defaultState = state;
-            }
-
-            if (!depositTypes.contains(defaultState)) {
-                List<BlockPos> scannedPos = new ArrayList<>();
-                int size = countNeighbors(ore, deepslate, pos, STCMConfig.CONFIG.prospectorMinDepositSize.get(), scannedPos);
-                if (size >= STCMConfig.CONFIG.prospectorMinDepositSize.get()) {
-                    this.depositsFound.put(defaultState, pos);
-                    depositTypes.add(defaultState);
-                }
-            }
-        });
+        depositsFound.addAll(
+                WorldTargets.get((ServerLevel) level).generated().values().stream()
+                        .filter(deposit ->
+                                AbstractOre.withinRadius(
+                                        new ChunkPos(deposit.pos),
+                                        new ChunkPos(startPosition),
+                                        STCMConfig.CONFIG.prospectorHorizontalRange.get())
+                        ).filter(deposit ->
+                                deposit.completeness()
+                                        .isGreaterOrEqualTo(Percentage.from(STCMConfig.CONFIG.prospectorMinDepositCompleteness.get())))
+                        .toList());
     }
 
-    private int countNeighbors(Block oreBlock, Block deepslateBlock, BlockPos pos, int maxCount, List<BlockPos> scannedPos) {
-        int count = 1;
-        scannedPos.add(pos);
-
-        for (Direction direction : Direction.values()) {
-            if (count >= maxCount) {
-                break;
-            }
-
-            BlockPos adjPos = pos.relative(direction);
-            if ((this.level.getBlockState(adjPos).is(oreBlock) || this.level.getBlockState(adjPos).is(deepslateBlock)) && !scannedPos.contains(adjPos)) {
-                count += this.countNeighbors(oreBlock, deepslateBlock, adjPos, maxCount - count, scannedPos);
-            }
-        }
-
-        return count;
-    }
-
-    private String  capitalizeFirstLetter(String word) {
+    private String capitalizeFirstLetter(String word) {
         String[] separated = word.split(" ");
         StringBuilder formatted = new StringBuilder();
         for (int i = 0; i < separated.length; i++) {

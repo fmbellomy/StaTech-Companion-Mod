@@ -18,8 +18,7 @@ public final class STCMConfig {
     public final ModConfigSpec.ConfigValue<Integer> lootrMaxXp;
     public final ModConfigSpec.ConfigValue<Boolean> nukeBlockDamage;
     public final ModConfigSpec.ConfigValue<Integer> prospectorHorizontalRange;
-    public final ModConfigSpec.ConfigValue<Integer> prospectorVerticalRange;
-    public final ModConfigSpec.ConfigValue<Integer> prospectorMinDepositSize;
+    public final ModConfigSpec.ConfigValue<Float> prospectorMinDepositCompleteness;
     public final ModConfigSpec.ConfigValue<Integer> sampleProximityRange;
     public final ModConfigSpec.ConfigValue<Boolean> preventRuinPlacement;
 
@@ -28,8 +27,7 @@ public final class STCMConfig {
         lootrMaxXp = builder.comment("The maximum amount of XP gained from opening Lootr chests.").define("lootr_max_xp", 20);
         nukeBlockDamage = builder.comment("Should nuke explosions do block damage?").define("nuke_damage", true);
         prospectorHorizontalRange = builder.comment("The horizontal radius for the prospector to scan").define("prospector_x_radius", 16);
-        prospectorVerticalRange = builder.comment("The vertical radius for the prospector to scan").define("prospector_y_radius", 256);
-        prospectorMinDepositSize = builder.comment("The minimum amount of connected blocks to be considered a deposit").define("prospector_min_deposit_size", 32);
+        prospectorMinDepositCompleteness = builder.comment("The minimum amount of connected blocks to be considered a deposit").define("prospector_min_deposit_size", 0.5f);
         sampleProximityRange = builder.comment("The distance between ore samples of the same type that duplicate waypoint creation should be blocked in").define("prospector_proximity", 16);
         preventRuinPlacement = builder.comment("Prevents Spectrum \"Bottle of Ruin\" from being placed in the world. Replaces the behavior of clicking on bedrock, mainly for servers").define("prevent_ruin", false);
         builder.build();
