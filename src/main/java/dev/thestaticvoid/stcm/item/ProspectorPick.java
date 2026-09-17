@@ -133,10 +133,8 @@ public class ProspectorPick extends Item {
     }
 
     private InteractionResult doDepositScan(Level level, Player player, UseOnContext context, BlockPos blockPos) {
-        if (level.getGameTime() > lastPickUseTime + PICK_COOLDOWN) {
-            lastPickUseTime = level.getGameTime();
+            player.getCooldowns().addCooldown(this, STCMConfig.CONFIG.prospectorCooldown.get());
             checkBlocksInArea(blockPos, level);
-
             if (!this.depositsFound.isEmpty()) {
                 player.sendSystemMessage(Component.translatable("chat.stcm.prospector_success"));
 
@@ -161,10 +159,7 @@ public class ProspectorPick extends Item {
             level.playSound(null, blockPos, SoundEvents.SHOVEL_FLATTEN, SoundSource.BLOCKS, 1.0F, 1.0F);
             context.getItemInHand().hurtAndBreak(1, player, LivingEntity.getSlotForHand(context.getHand()));
             return InteractionResult.SUCCESS;
-        } else {
-            player.displayClientMessage(Component.translatable("chat.stcm.prospector_cooldown", ((lastPickUseTime + PICK_COOLDOWN - level.getGameTime()) / 20.0)), true);
-            return InteractionResult.FAIL;
-        }
+
     }
 
     private void checkBlocksInArea(BlockPos startPosition, Level level) {

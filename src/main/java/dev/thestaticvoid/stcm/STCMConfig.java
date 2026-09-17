@@ -20,6 +20,7 @@ public final class STCMConfig {
     public final ModConfigSpec.ConfigValue<Integer> prospectorHorizontalRange;
     public final ModConfigSpec.ConfigValue<Integer> prospectorVerticalRange;
     public final ModConfigSpec.ConfigValue<Integer> prospectorMinDepositSize;
+    public final ModConfigSpec.ConfigValue<Integer> prospectorCooldown;
     public final ModConfigSpec.ConfigValue<Integer> sampleProximityRange;
     public final ModConfigSpec.ConfigValue<Boolean> preventRuinPlacement;
 
@@ -30,6 +31,7 @@ public final class STCMConfig {
         prospectorHorizontalRange = builder.comment("The horizontal radius for the prospector to scan").define("prospector_x_radius", 16);
         prospectorVerticalRange = builder.comment("The vertical radius for the prospector to scan").define("prospector_y_radius", 256);
         prospectorMinDepositSize = builder.comment("The minimum amount of connected blocks to be considered a deposit").define("prospector_min_deposit_size", 32);
+        prospectorCooldown = builder.comment("The number of ticks to wait before you can use the prospector pick again.").define("prospector_cooldown", 100);
         sampleProximityRange = builder.comment("The distance between ore samples of the same type that duplicate waypoint creation should be blocked in").define("prospector_proximity", 16);
         preventRuinPlacement = builder.comment("Prevents Spectrum \"Bottle of Ruin\" from being placed in the world. Replaces the behavior of clicking on bedrock, mainly for servers").define("prevent_ruin", false);
         builder.build();
