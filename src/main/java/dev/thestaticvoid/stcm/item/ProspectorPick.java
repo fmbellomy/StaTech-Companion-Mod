@@ -159,9 +159,6 @@ public class ProspectorPick extends Item {
                 oreNameMap.put(capitalizeFirstLetter((oreName.substring(0, oreName.indexOf("_ore"))).replace("_", " ")), pos);
             });
 
-            int longestDepositNameLength = oreNameMap.keySet().stream().map(String::length).max(Comparator.comparingInt(a -> a)).orElse(0);
-
-
             Map<Integer, String> depositsByDistance = new HashMap<>();
             oreNameMap.keySet().forEach(name -> {
                 int distance = switch (STCMConfig.CONFIG.prospectorDistanceMode.get()) {
@@ -170,6 +167,7 @@ public class ProspectorPick extends Item {
                 };
                 depositsByDistance.put(distance, name);
             });
+            int longestDepositNameLength = oreNameMap.keySet().stream().map(String::length).max(Comparator.comparingInt(a -> a)).orElse(0);
             depositsByDistance.entrySet().stream().sorted(Comparator.comparingInt(Map.Entry::getKey)).forEachOrdered(entry -> {
                 System.out.println(entry.getValue());
                 String depositDisplay = String.format("%1$-" + longestDepositNameLength + "s ", entry.getValue());
