@@ -39,9 +39,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class ProspectorPick extends Item {
-    private final int PICK_COOLDOWN = 100; // 5 seconds
     private final Map<BlockPos, Float> depositRichness = new HashMap<>();
-    private long lastPickUseTime = 0;
     private Level level;
 
     public ProspectorPick(Properties properties) {
@@ -146,8 +144,7 @@ public class ProspectorPick extends Item {
     }
 
     private InteractionResult doDepositScan(Level level, Player player, UseOnContext context, BlockPos blockPos) {
-        if (level.getGameTime() > lastPickUseTime + PICK_COOLDOWN) {
-            lastPickUseTime = level.getGameTime();
+            player.getCooldowns().addCooldown(this, STCMConfig.CONFIG.prospectorCooldown.get());
             List<TargetGenResult> depositsFound = getNearbyDeposits(blockPos, level);
             if (!depositsFound.isEmpty()) {
                 player.sendSystemMessage(Component.translatable("chat.stcm.prospector_success"));
@@ -183,10 +180,7 @@ public class ProspectorPick extends Item {
             context.getItemInHand().hurtAndBreak(1, player, LivingEntity.getSlotForHand(context.getHand()));
             depositRichness.clear();
             return InteractionResult.SUCCESS;
-        } else {
-            player.displayClientMessage(Component.translatable("chat.stcm.prospector_cooldown", ((lastPickUseTime + PICK_COOLDOWN - level.getGameTime()) / 20.0)), true);
-            return InteractionResult.FAIL;
-        }
+
     }
 
     private List<TargetGenResult> getNearbyDeposits(BlockPos startPosition, Level level) {
