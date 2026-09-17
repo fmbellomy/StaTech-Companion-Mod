@@ -1,6 +1,5 @@
 package dev.thestaticvoid.stcm.item;
 
-import com.endertech.minecraft.forge.math.Percentage;
 import com.endertech.minecraft.mods.adlods.ore.AbstractOre;
 import com.endertech.minecraft.mods.adlods.target.TargetGenResult;
 import com.endertech.minecraft.mods.adlods.world.WorldTargets;
@@ -32,20 +31,18 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.Property;
 
-import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.SortedSet;
-import java.util.TreeSet;
+import java.util.Set;
 
 public class ProspectorPick extends Item {
-    private static final Map<String, Integer> MaterialMap = new HashMap<>();
     private final int PICK_COOLDOWN = 100; // 5 seconds
-    private final List<TargetGenResult> depositsFound = new ArrayList<>();
     private long lastPickUseTime = 0;
     private Level level;
-
+    private final Map<BlockPos, Float> depositRichness = new HashMap<>();
     public ProspectorPick(Properties properties) {
         super(properties);
     }
@@ -102,8 +99,7 @@ public class ProspectorPick extends Item {
         if (waypointColor == null) {
             waypointColor = ChatFormatting.WHITE;
         }
-
-        String formattedMatName = capitalizeFirstLetter(material);
+        String formattedMatName = snakeCaseToDisplay(material);
         String formattedPosition = String.format("(%s, %s, %s)", blockPos.getX(), blockPos.getY(), blockPos.getZ());
 
         // Check to make sure there are no other waypoints of the same material type in the vicinity
@@ -142,30 +138,47 @@ public class ProspectorPick extends Item {
         }
     }
 
+    private float distXZ(BlockPos origin, BlockPos other) {
+        final float distX = Math.abs(other.getX() - origin.getX());
+        final float distZ = Math.abs(other.getZ() - origin.getZ());
+        return (float) Math.sqrt(distX * distX + distZ * distZ);
+    }
     private InteractionResult doDepositScan(Level level, Player player, UseOnContext context, BlockPos blockPos) {
         if (level.getGameTime() > lastPickUseTime + PICK_COOLDOWN) {
             lastPickUseTime = level.getGameTime();
-            checkBlocksInArea(blockPos, level);
-
-            if (!this.depositsFound.isEmpty()) {
+            List<TargetGenResult> depositsFound = getNearbyDeposits(blockPos, level);
+            if (!depositsFound.isEmpty()) {
                 player.sendSystemMessage(Component.translatable("chat.stcm.prospector_success"));
 
-                Map<String, BlockPos> oreNameMap = new HashMap<>();
-                this.depositsFound.forEach((result) -> {
-                    oreNameMap.put(result.name, result.pos);
+                Map<TargetGenResult, Integer> depositDistances = new HashMap<>();
+                depositsFound.forEach((result) -> {
+                    int distance = (int) distXZ(result.pos, blockPos);
+                    depositDistances.put(result, distance);
                 });
 
-                SortedSet<String> sortedKeys = new TreeSet<>(oreNameMap.keySet());
-                for (String key : sortedKeys) {
-                    int distance = (int) Math.sqrt(oreNameMap.get(key).distSqr(blockPos));
-                    player.sendSystemMessage(Component.translatable("chat.stcm.prospector_deposit_info", key, distance));
-                }
+                int longestDepositNameLength = depositsFound.stream().map(deposit ->
+                        deposit.name.length()).max(Comparator.comparingInt(a -> a)).orElse(0);
+                ChatFormatting[] richnessColors = {ChatFormatting.OBFUSCATED, ChatFormatting.RED, ChatFormatting.GOLD, ChatFormatting.YELLOW, ChatFormatting.GREEN, ChatFormatting.AQUA, ChatFormatting.STRIKETHROUGH};
+                depositDistances.entrySet().stream().sorted(Comparator.comparingInt(Map.Entry::getValue)).forEach(entry -> {
+                    int richness = (int) Math.ceil(depositRichness.get(entry.getKey().pos) * 5);
+                    String richnessDisplay =
+                            String.format("%1$-9s",  Component.translatable("chat.stcm.prospector_deposit_fullness_" + richness).getString()) +
+                            String.format(" (%1$5.1f%%)",depositRichness.get(entry.getKey().pos) * 100.0f);
+                    String depositDisplay = String.format("%1$-" + longestDepositNameLength + "s", snakeCaseToDisplay(entry.getKey().name));
+                    ResourceLocation monoFont = ResourceLocation.fromNamespaceAndPath("minecraft", "mono");
+                    player.sendSystemMessage(Component.translatable("chat.stcm.prospector_deposit_info",
+                            Component.literal(depositDisplay).withStyle(ChatFormatting.AQUA).withStyle(style ->
+                                    style.withFont(monoFont)),
+                            Component.literal(richnessDisplay).withStyle(richnessColors[richness]).withStyle(style -> style.withFont(monoFont)),
+                            Component.literal(entry.getValue().toString()).withStyle(ChatFormatting.YELLOW)));
+                });
             } else {
                 player.sendSystemMessage(Component.translatable("chat.stcm.prospector_no_deposits"));
             }
 
             level.playSound(null, blockPos, SoundEvents.SHOVEL_FLATTEN, SoundSource.BLOCKS, 1.0F, 1.0F);
             context.getItemInHand().hurtAndBreak(1, player, LivingEntity.getSlotForHand(context.getHand()));
+            depositRichness.clear();
             return InteractionResult.SUCCESS;
         } else {
             player.displayClientMessage(Component.translatable("chat.stcm.prospector_cooldown", ((lastPickUseTime + PICK_COOLDOWN - level.getGameTime()) / 20.0)), true);
@@ -173,30 +186,77 @@ public class ProspectorPick extends Item {
         }
     }
 
-    private void checkBlocksInArea(BlockPos startPosition, Level level) {
-        this.depositsFound.clear();
-        depositsFound.addAll(
-                WorldTargets.get((ServerLevel) level).generated().values().stream()
-                        .filter(deposit ->
-                                AbstractOre.withinRadius(
-                                        new ChunkPos(deposit.pos),
-                                        new ChunkPos(startPosition),
-                                        STCMConfig.CONFIG.prospectorHorizontalRange.get())
-                        ).filter(deposit ->
-                                deposit.completeness()
-                                        .isGreaterOrEqualTo(Percentage.from(STCMConfig.CONFIG.prospectorMinDepositCompleteness.get())))
-                        .toList());
-    }
+    private List<TargetGenResult> getNearbyDeposits(BlockPos startPosition, Level level) {
 
-    private String capitalizeFirstLetter(String word) {
-        String[] separated = word.split(" ");
-        StringBuilder formatted = new StringBuilder();
-        for (int i = 0; i < separated.length; i++) {
-            if (separated[i].length() > 1) {
-                formatted.append(separated[i].toUpperCase().charAt(0)).append(separated[i].substring(1)).append(" ");
+        return WorldTargets.get((ServerLevel) level).generated().values().stream()
+                .filter(deposit ->
+                        AbstractOre.withinRadius(
+                                new ChunkPos(deposit.pos),
+                                new ChunkPos(startPosition),
+                                STCMConfig.CONFIG.prospectorHorizontalRange.get())
+                ).filter(deposit -> {
+                    BlockState state = level.getBlockState(deposit.pos);
+                    ResourceLocation center = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+                    Block oreBlock = null;
+                    Block deepslateOreBlock = null;
+                    if(center.getPath().contains("_deepslate")){
+                        String formattedPath = center.getPath().substring("deepslate_".length());
+                        if (BuiltInRegistries.BLOCK.containsKey(ResourceLocation.fromNamespaceAndPath(center.getNamespace(), formattedPath))) {
+                            oreBlock = BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath(center.getNamespace(), formattedPath));
+                        }
+                        deepslateOreBlock = state.getBlock();
+                    } else {
+                        String formattedPath = "deepslate_" + center.getPath();
+                        if (BuiltInRegistries.BLOCK.containsKey(ResourceLocation.fromNamespaceAndPath(center.getNamespace(), formattedPath))) {
+                            deepslateOreBlock = BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath(center.getNamespace(), formattedPath));
+                        }
+                        oreBlock = state.getBlock();
+                    }
+
+                    Set<BlockPos> scannedPos = new HashSet<>();
+                    // the amount of ore blocks that must be found in order to not be considered "depleted"
+                    int minCount = (int)(deposit.size * STCMConfig.CONFIG.prospectorMinDepositCompleteness.get());
+                    int found = countNeighbors(oreBlock, deepslateOreBlock, level, deposit.pos, deposit.size,scannedPos);
+                    if(state.isAir()){
+                        found = 0;
+                    }
+                    depositRichness.put(deposit.pos, (float) found/deposit.size);
+                    return found > minCount;
+                })
+                .toList();
+    }
+    private int countNeighbors(Block oreBlock, Block deepslateOreBlock, Level level, BlockPos pos, int maxCount, Set<BlockPos> scannedPos) {
+        int count = 1;
+
+        if(!scannedPos.add(pos)){
+            return 0;
+        }
+
+        for (Direction direction : Direction.values()) {
+            if (count >= maxCount) {
+                break;
+            }
+
+            BlockPos adjPos = pos.relative(direction);
+            boolean isDeepslate = deepslateOreBlock != null && level.getBlockState(adjPos).is(deepslateOreBlock);
+            boolean isOre = oreBlock != null && level.getBlockState(adjPos).is(oreBlock);
+            if (isOre || isDeepslate) {
+                count += countNeighbors(oreBlock, deepslateOreBlock, level, adjPos, maxCount - count, scannedPos);
             }
         }
 
+        return count;
+    }
+    private String snakeCaseToDisplay(String word) {
+
+        word = word.replace("_", " ");
+        String[] separated = word.split(" ");
+        StringBuilder formatted = new StringBuilder();
+        for (String s : separated) {
+            if (s.length() > 1) {
+                formatted.append(s.toUpperCase().charAt(0)).append(s.substring(1)).append(" ");
+            }
+        }
         return formatted.toString().trim();
     }
 }
